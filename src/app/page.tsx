@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRepo } from "@/components/providers/repo-provider";
 import { StackColumn } from "@/components/stack-column";
+import { OwnerSwimlane, getLastActiveDate } from "@/components/owner-swimlane";
 import { BranchDetail } from "@/components/branch-detail/branch-detail";
 import { Separator } from "@/components/ui/separator";
-import type { BranchResponse } from "@/lib/api";
+import type { BranchResponse, StackDetail } from "@/lib/api";
 
 export default function Home() {
   const { repo, stackDetails, loading, error, lastUpdated, refresh } =
@@ -13,6 +14,29 @@ export default function Home() {
   const [selectedBranch, setSelectedBranch] = useState<BranchResponse | null>(
     null
   );
+
+  const currentUser = repo?.currentUser;
+
+  const { yourStacks, otherOwners } = useMemo(() => {
+    const yours: StackDetail[] = [];
+    const others = new Map<string, StackDetail[]>();
+    for (const stack of stackDetails) {
+      if (!stack.owner || stack.owner === currentUser) {
+        yours.push(stack);
+      } else {
+        const existing = others.get(stack.owner);
+        if (existing) {
+          existing.push(stack);
+        } else {
+          others.set(stack.owner, [stack]);
+        }
+      }
+    }
+    const sortedOthers = [...others.entries()].sort(([a], [b]) =>
+      a.localeCompare(b)
+    );
+    return { yourStacks: yours, otherOwners: sortedOthers };
+  }, [stackDetails, currentUser]);
 
   if (loading) {
     return (
@@ -55,7 +79,7 @@ export default function Home() {
         <div className="flex items-center gap-3">
           {lastUpdated && (
             <span className="text-xs text-muted-foreground">
-              <TimeAgo date={lastUpdated} />
+              {formatTimeAgo(lastUpdated)}
             </span>
           )}
           <button
@@ -68,27 +92,41 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main content: stacks on left, detail on right */}
+      {/* Main content: stacks area + detail panel */}
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 overflow-auto">
           {stackDetails.length > 0 ? (
-            <div className="flex flex-col min-h-full">
-              <div className="flex gap-6 p-6 pb-0 items-end flex-1">
-                {stackDetails.map((stack) => (
-                  <StackColumn
-                    key={stack.rootBranch}
-                    stack={stack}
+            <div className="flex flex-col justify-end min-h-full">
+              {/* All swimlanes in one horizontal row */}
+              <div className="flex items-end gap-8 p-6 pb-4 min-w-max">
+                {/* Your stacks */}
+                {yourStacks.length > 0 && (
+                  <OwnerSwimlane
+                    label="You"
+                    stacks={yourStacks}
+                    selectedBranch={selectedBranch?.name ?? null}
+                    onSelectBranch={setSelectedBranch}
+                  />
+                )}
+
+                {/* Teammate swimlanes */}
+                {otherOwners.map(([owner, stacks]) => (
+                  <OwnerSwimlane
+                    key={owner}
+                    label={`@${owner}`}
+                    lastActive={getLastActiveDate(stacks)}
+                    stacks={stacks}
                     selectedBranch={selectedBranch?.name ?? null}
                     onSelectBranch={setSelectedBranch}
                   />
                 ))}
               </div>
-              <div className="px-6 pb-6">
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="flex-1 border-t-2 border-dashed border-muted-foreground/30" />
-                  <span className="text-xs font-mono text-muted-foreground">{repo?.trunk}</span>
-                  <div className="flex-1 border-t-2 border-dashed border-muted-foreground/30" />
-                </div>
+
+              {/* Trunk line */}
+              <div className="flex items-center gap-2 px-6 pb-6">
+                <div className="flex-1 border-t-2 border-dashed border-muted-foreground/30" />
+                <span className="text-xs font-mono text-muted-foreground">{repo?.trunk}</span>
+                <div className="flex-1 border-t-2 border-dashed border-muted-foreground/30" />
               </div>
             </div>
           ) : (
@@ -112,10 +150,14 @@ export default function Home() {
   );
 }
 
-function TimeAgo({ date }: { date: Date }) {
+function formatTimeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (seconds < 5) return <>just now</>;
-  if (seconds < 60) return <>{seconds}s ago</>;
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
-  return <>{minutes}m ago</>;
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }

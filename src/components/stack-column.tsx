@@ -43,7 +43,7 @@ export function StackColumn({
       </div>
 
       {/* Stacked branch cards */}
-      <div className="flex flex-col">
+      <div className="flex flex-col bg-white rounded-lg">
         {displayBranches.map((branch, i) => {
           const isFirst = i === 0;
           const isLast = i === displayBranches.length - 1;

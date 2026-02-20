@@ -10,6 +10,7 @@ export interface RepoResponse {
   trunk: string;
   currentBranch: string;
   remote: string;
+  currentUser?: string;
 }
 
 export interface StackSummary {
@@ -21,6 +22,7 @@ export interface StackSummary {
   prCount: number;
   isCurrent: boolean;
   description?: string;
+  owner?: string;
 }
 
 export interface StackDetail extends StackSummary {
